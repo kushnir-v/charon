@@ -13,9 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - uses: DeLaGuardo/setup-clj-kondo@v1
-      with:
-        version: '2020.04.05'
+    - name: Setup clj-kondo
+      uses: DeLaGuardo/setup-clj-kondo@v1
     - name: Install dependencies
       run: lein deps
     - name: Lint (clj-kondo)
