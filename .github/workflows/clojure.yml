@@ -13,12 +13,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup clj-kondo
-      uses: DeLaGuardo/setup-clj-kondo@v1
     - name: Install dependencies
       run: lein deps
     - name: Lint (clj-kondo)
-      run: clj-kondo --lint "$(lein classpath)" 
+      uses: DeLaGuardo/clojure-lint-action@master
+      with:
+        clj-kondo-args: --lint "$(lein classpath)"
+        check-name: clj-kondo
+        github_token: ${{ secrets.GITHUB_TOKEN }}
     - name: Lint (eastwood)
       run: lein eastwood
     - name: Run tests
