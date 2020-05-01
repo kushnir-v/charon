@@ -1,0 +1,26 @@
+name: Clojure CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: DeLaGuardo/setup-clj-kondo@v1
+      with:
+        version: '2020.04.05'
+    - name: Install dependencies
+      run: lein deps
+    - name: Lint (clj-kondo)
+      run: clj-kondo --lint "$(lein classpath)" 
+    - name: Lint (eastwood)
+      run: lein eastwood
+    - name: Run tests
+      run: lein test
