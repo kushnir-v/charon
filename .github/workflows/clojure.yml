@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: lein deps
     - name: Lint (clj-kondo)
-      run: clj-kondo --lint "$(lein classpath)"
+      run: clj-kondo --lint src
     - name: Lint (eastwood)
       run: lein eastwood
     - name: Run tests
