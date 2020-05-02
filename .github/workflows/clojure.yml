@@ -28,3 +28,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: lein deploy github
+    - name: Uberjar
+      run: lein uberjar
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v1
+      with:
+        name: charon.jar
+        path: target/uberjar/charon-*-standalone.jar
