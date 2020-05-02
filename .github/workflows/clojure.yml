@@ -31,7 +31,7 @@ jobs:
     - name: Uberjar
       run: lein uberjar
     - name: Upload artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
         name: charon.jar
         path: target/uberjar/charon-*-standalone.jar
