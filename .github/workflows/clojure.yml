@@ -25,4 +25,6 @@ jobs:
     - name: Run tests
       run: lein test
     - name: Deploy
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: lein deploy github
