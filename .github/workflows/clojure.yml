@@ -33,5 +33,5 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: uberjar
+        name: charon
         path: target/uberjar/charon-*-standalone.jar
