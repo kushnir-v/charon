@@ -25,5 +25,5 @@
              :uberjar {:aot :all}}
   :repositories [["github" {:url "https://maven.pkg.github.com/shapiy/charon"
                             :username "shapiy"
-                            :password env/github_token}]]
+                            :password :env/github_token}]]
   :repl-options {:init-ns user})
