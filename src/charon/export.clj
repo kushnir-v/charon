@@ -7,7 +7,6 @@
             [charon.toc :as toc]
             [charon.utils :as utils]
             [hiccup.core :as h]
-            [loom.alg :refer [pre-span]]
             [slingshot.slingshot :refer [throw+]]))
 
 ;; TODO: Retries

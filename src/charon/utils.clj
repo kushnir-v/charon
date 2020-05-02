@@ -2,7 +2,6 @@
   (:require [clj-http.client :as client]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [loom.alg :refer [pre-span]]
             [slingshot.slingshot :refer [throw+]]
             [clojure.tools.logging :as log])
   (:import (java.io File)
@@ -15,12 +14,12 @@
       (string/lower-case)
       (string/replace #"[^\p{L}\d]" "-")))
 
-(defprotocol Named
-  (name [_]))
+(defprotocol Resource
+  (file-name [_]))
 
 (defrecord Attachment [page-id title]
-  Named
-  (name [a]
+  Resource
+  (file-name [a]
     (format "%s-%s" (.page-id a) title)))
 
 (defn attachment [page-id title]
@@ -30,11 +29,11 @@
 
 (defn attachment-filename
   ([^Attachment attachment]
-   (str attachments-dirname "/" (.name attachment)))
+   (str attachments-dirname "/" (.file-name attachment)))
   ([output page-id title]
    (string/join "/" [output
                      attachments-dirname
-                     (.name (attachment page-id title))])))
+                     (.file-name (attachment page-id title))])))
 
 (defn filename
   ([title]

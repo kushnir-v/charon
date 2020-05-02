@@ -1,9 +1,8 @@
+;; TODO: Get rid of loom.
 (ns charon.toc
   (:require [clojure.set :as set]
             [charon.utils :as utils]
-            [loom.alg :refer [pre-span]]
             [loom.graph :as g]
-            [slingshot.slingshot :refer [throw+]]
             [clojure.walk :as walk]))
 
 (defn- data [pages]
