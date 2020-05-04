@@ -10,8 +10,10 @@
 (def cli-options
   [["-o" "--output OUTPUT" "Output directory"
     :missing "Output directory (--output) is required"]
-   ["-s" "--space-url SPACE_URL" "Confluence space URL"
-    :missing "Confluence space URL (--space-url) is required"]
+   [nil "--space-url SPACE_URL" "Confluence space URL"
+    :id :space-url]
+   [nil "--page-url PAGE_URL" "Confluence page URL"
+    :id :page-url]
    ["-u" "--user USER" "Username"]
    ["-p" "--password PASSWORD" "Password"]
    ["-h" "--help"]])
@@ -19,8 +21,10 @@
 (defn- enrich-opts
   "Enrich options map with derived data.
 
+  - Check if either `space-url` or `page-url` is provided.
   - Extract Confluence URL, `confluence-url`.
   - Extract Confluence space key, `space`.
+  - Extract Confluence page name, `page`.
 
   Return `nil` when data cannot be parsed.
 
@@ -32,12 +36,25 @@
    :confluence-url \"https://wiki.xandr.com\",
    :space \"sdk\"}
   ```"
-  [{:keys [space-url] :as m}]
-  (if (string/includes? space-url "/display/")
-    (let [[confluence-url path] (string/split "https://wiki.xandr.com/display/sdk/Home" #"/display/" 2)
-          [space & _] (string/split path #"/" 2)]
-      (assoc m :confluence-url confluence-url :space space))
-    nil))
+  [{:keys [space-url page-url] :as m}]
+  (let [content-url (or space-url page-url)]
+    (cond
+      (every? identity [space-url page-url])
+      {:exit-message "Should provide only one of --space-url or --page-url"}
+
+      (every? nil? [space-url page-url])
+      {:exit-message "Should provide at least --space-url or --page-url"}
+
+      (not (string/includes? content-url "/display/"))
+      {:exit-message "Unknown content URL format"}
+
+      :else (let [[confluence-url path] (string/split content-url #"/display/" 2)
+                  [space page & _] (string/split path #"/" 3)
+                  res (assoc m :confluence-url confluence-url :space space)]
+              (cond
+                (and page-url (not page)) {:exit-message "Unknown page URL format"}
+                (and page-url page) {:options (assoc res :page page)}
+                :else {:options res})))))
 
 (defn validate-args
   "Validate command line arguments. Either return a map indicating the program
@@ -48,13 +65,12 @@
     (cond
       (:help options) {:exit-message summary :ok? true}
       errors {:exit-message (string/join \newline errors)}
-      :else (if-let [enriched-options (enrich-opts options)]
-              {:options enriched-options}
-              {:exit-message "Unknown Space URL format"}))))
+      :else (enrich-opts options))))
 
 (defn exit [status msg]
-  (log/error msg)
-  (System/exit status))
+  (let [level (if (= status 0) :info :error)]
+    (log/log level msg)
+    (System/exit status)))
 
 (defn -main
   [& args]

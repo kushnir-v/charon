@@ -10,7 +10,6 @@
             [slingshot.slingshot :refer [throw+]]))
 
 ;; TODO: Retries
-;; TODO: Attachments
 ;; TODO: Memory footprint?
 ;; TODO: Authorization
 
@@ -22,25 +21,37 @@
     m))
 
 (def content-request-limit 25)
-(def content-request-expand (string/join "," ["body.export_view" "children.page" "children.attachment"]))
+(def content-request-expand (string/join "," ["ancestors" "body.export_view" "children.page" "children.attachment"]))
 
-(defn- fetch-pages [{:keys [confluence-url space]}]
-  (let [content-url (format "%s/rest/api/space/%s/content" confluence-url space)]
+(defn- get-json [url r]
+  (let [{:keys [status body] :as resp} (client/get url r)]
+    (if-not (= status 200)
+      (throw+ {:type    ::request-failed
+               :message "HTTP request to Confluence failed"
+               :context resp})
+      (json/parse-string body true))))
+
+(defn- ancestor-or-self= [title]
+  (if title
+    (fn [page] (let [titles (->> (:ancestors page)
+                                 (map :title)               ;; Ancestors titles
+                                 (into #{(:title page)}))]  ;; Self title
+                 (contains? titles title)))
+    (constantly true)))
+
+(defn- get-pages [{:keys [confluence-url space page]}]
+  (let [url (format "%s/rest/api/space/%s/content" confluence-url space)
+        ancestor-pred (ancestor-or-self= page)]
     (loop [start 0 ret (list)]
       (log/infof "Downloading %d pages starting from: %d" content-request-limit start)
       (let [query-params {:type "page" :start start :limit content-request-limit :expand content-request-expand}
-            {:keys [status body] :as resp} (client/get content-url {:accept :json :query-params query-params})]
-        (if-not (= status 200)
-          (throw+ {:type    ::request-failed
-                   :message "HTTP request to Confluence failed"
-                   :context resp})
-          (let [body-map (json/parse-string body true)
-                next-path (get-in body-map [:page :_links :next])
-                next-ret (lazy-cat ret (get-in body-map [:page :results] (list)))]
-            (if-not next-path
-              next-ret
-              (let [next-start (+ start content-request-limit)]
-                (recur next-start next-ret)))))))))
+            body (get-json url {:accept :json :query-params query-params})]
+        (let [next-path (get-in body [:page :_links :next])
+              next-ret (lazy-cat ret (filter ancestor-pred (get-in body [:page :results] (list))))]
+          (if-not next-path
+            next-ret
+            (let [next-start (+ start content-request-limit)]
+              (recur next-start next-ret))))))))
 
 (defn- write-pages [pages attachments {:keys [confluence-url output]}]
   (doseq [p pages]
@@ -77,9 +88,11 @@
     (shutdown-agents)
     attachments))
 
-(defn- export [{:keys [confluence-url space output] :as config}]
-  (log/infof "Exporting Confluence space \"%s\" from: %s" space confluence-url)
-  (let [pages (fetch-pages config)
+(defn- export [{:keys [confluence-url space page output] :as config}]
+  (if page
+    (log/infof "Exporting Confluence page %s - %s from: %s" space page confluence-url)
+    (log/infof "Exporting Confluence space %s from: %s" space confluence-url))
+  (let [pages (get-pages config)
         attachments (download-attachments pages output confluence-url)]
     (write-pages pages attachments config)
     (write-toc (toc/html pages) output)))
