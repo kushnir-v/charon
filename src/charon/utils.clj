@@ -50,6 +50,9 @@
         (do (io/delete-file f)
             (recur (rest fs)))))))
 
+(defn id->title [pages]
+  (into {} (map (juxt :id :title) pages)))
+
 (defn make-dirs [^File f]
   (log/infof "Creating folder: %s" f)
   (.mkdirs f))

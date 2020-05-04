@@ -45,7 +45,7 @@
          (mapv #(branch % graph id->position)))))
 
 (defn- nav [pages]
-  (let [id->title (into {} (map (juxt :id :title) pages))]
+  (let [id->title (utils/id->title pages)]
     (fn [form]
       (if (and (vector? form) (string? (first form)))
         (let [id (first form)

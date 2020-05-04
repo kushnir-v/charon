@@ -9,6 +9,7 @@
                  [ch.qos.logback/logback-classic "1.2.3"]
                  [clj-http "3.10.1"]
                  [hiccup "1.0.5"]
+                 [lambdaisland/uri "1.3.45"]
                  [org.clojure/tools.cli "1.0.194"]
                  [org.clojure/tools.logging "1.1.0"]
                  [org.jsoup/jsoup "1.13.1"]

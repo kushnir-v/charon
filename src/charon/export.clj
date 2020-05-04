@@ -42,11 +42,12 @@
               (let [next-start (+ start content-request-limit)]
                 (recur next-start next-ret)))))))))
 
-(defn- write-pages [pages output attachments]
+(defn- write-pages [pages attachments {:keys [confluence-url output]}]
   (doseq [p pages]
     (let [{:keys [id title]} p
           content (-> (get-in p [:body :export_view :value])
-                      (html/process id title attachments))
+                      ;; TODO: Too many options passed here and there. Extract them in a state?
+                      (html/process id title attachments pages confluence-url))
           f (utils/filename output title)]
       (utils/write-file f content))))
 
@@ -80,7 +81,7 @@
   (log/infof "Exporting Confluence space \"%s\" from: %s" space confluence-url)
   (let [pages (fetch-pages config)
         attachments (download-attachments pages output confluence-url)]
-    (write-pages pages output attachments)
+    (write-pages pages attachments config)
     (write-toc (toc/html pages) output)))
 
 (defn run [options]
