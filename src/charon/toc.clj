@@ -31,8 +31,15 @@
            (into ret))
       ret)))
 
+(defn- page-position [page]
+  (let [position (get-in page [:extensions :position] ##Inf)]
+    ;; Can be, for example, "none".
+    (if (number? position) position ##Inf)))
+
 (defn- tree [pages {:keys [graph roots]}]
-  (let [id->position (into {} (map #(vector (:id %) (get-in % [:extensions :position] ##Inf)) pages))]
+  (let [id->position (->> pages
+                          (map (juxt :id page-position))
+                          (into {}))]
     (->> roots
          (sort-by id->position)
          (mapv #(branch % graph id->position)))))
