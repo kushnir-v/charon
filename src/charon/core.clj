@@ -7,6 +7,8 @@
 
 (def run export/run)
 
+(def not-blank (complement string/blank?))
+
 (def cli-options
   [["-o" "--output OUTPUT" "Output directory"
     :missing "Output directory (--output) is required"]
@@ -14,8 +16,12 @@
     :id :space-url]
    [nil "--page-url PAGE_URL" "Confluence page URL"
     :id :page-url]
-   ["-u" "--user USER" "Username"]
-   ["-p" "--password PASSWORD" "Password"]
+   ["-u" "--user USER" "Username"
+    :validate-fn not-blank
+    :validate-msg "Username (if passed) cannot be blank"]
+   ["-p" "--password PASSWORD" "Password"
+    :validate-fn not-blank
+    :validate-msg "Password (if passed) cannot be blank"]
    ["-h" "--help"]])
 
 (defn- enrich-opts

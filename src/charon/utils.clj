@@ -1,5 +1,6 @@
 (ns charon.utils
-  (:require [clj-http.client :as client]
+  (:require [cheshire.core :as json]
+            [clj-http.client :as client]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [slingshot.slingshot :refer [throw+]]
@@ -12,7 +13,7 @@
   (-> title
       (URLDecoder/decode (.name StandardCharsets/UTF_8))
       (string/lower-case)
-      (string/replace #"[^\p{L}\d]" "-")))
+      (string/replace #"[^\p{L}\d\.]" "-")))
 
 (defprotocol Resource
   (file-name [_]))
@@ -79,11 +80,30 @@
       (make-dirs attachments-dir)))
   config)
 
-(defn download-file [url f]
-  (log/infof "Writing: %s" f)
-  (clojure.java.io/copy
-    (:body (client/get url {:as :stream}))
-    (io/file f)))
+(defn- get-body [url r {:keys [user password]}]
+  (let [opts (-> r
+                 (merge {:socket-timeout 10000 :connection-timeout 10000})
+                 (conj (when password [:basic-auth [user password]])))
+        {:keys [status body] :as resp} (client/get url opts)]
+    (if-not (= status 200)
+      (throw+ {:type    ::request-failed
+               :message "HTTP request to Confluence failed"
+               :context resp})
+      body)))
+
+(defn get-json [url r config]
+  (json/parse-string (get-body url r config) true))
+
+(defn download-file [url f config]
+  (try
+    (log/infof "Writing: %s" f)
+    (clojure.java.io/copy
+      (get-body url {:as :stream} config)
+      (io/file f))
+    true
+    (catch Exception e
+      (log/warnf e "Cannot download file: %s" url)
+      nil)))
 
 (defn write-file [f content]
   (log/infof "Writing: %s" f)

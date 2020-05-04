@@ -1,7 +1,5 @@
 (ns charon.export
-  (:require [cheshire.core :as json]
-            [clj-http.client :as client]
-            [clojure.string :as string]
+  (:require [clojure.string :as string]
             [clojure.tools.logging :as log]
             [charon.html :as html]
             [charon.toc :as toc]
@@ -11,7 +9,6 @@
 
 ;; TODO: Retries
 ;; TODO: Memory footprint?
-;; TODO: Authorization
 
 (defn- check-config [{:keys [confluence-url output space] :as m}]
   (if (some nil? [confluence-url output space])
@@ -23,14 +20,6 @@
 (def content-request-limit 25)
 (def content-request-expand (string/join "," ["ancestors" "body.export_view" "children.page" "children.attachment"]))
 
-(defn- get-json [url r]
-  (let [{:keys [status body] :as resp} (client/get url r)]
-    (if-not (= status 200)
-      (throw+ {:type    ::request-failed
-               :message "HTTP request to Confluence failed"
-               :context resp})
-      (json/parse-string body true))))
-
 (defn- ancestor-or-self= [title]
   (if title
     (fn [page] (let [titles (->> (:ancestors page)
@@ -39,19 +28,19 @@
                  (contains? titles title)))
     (constantly true)))
 
-(defn- get-pages [{:keys [confluence-url space page]}]
+(defn- get-pages [{:keys [confluence-url space page] :as config}]
   (let [url (format "%s/rest/api/space/%s/content" confluence-url space)
         ancestor-pred (ancestor-or-self= page)]
     (loop [start 0 ret (list)]
       (log/infof "Downloading %d pages starting from: %d" content-request-limit start)
       (let [query-params {:type "page" :start start :limit content-request-limit :expand content-request-expand}
-            body (get-json url {:accept :json :query-params query-params})]
-        (let [next-path (get-in body [:page :_links :next])
-              next-ret (lazy-cat ret (filter ancestor-pred (get-in body [:page :results] (list))))]
-          (if-not next-path
-            next-ret
-            (let [next-start (+ start content-request-limit)]
-              (recur next-start next-ret))))))))
+            body (utils/get-json url {:accept :json :query-params query-params} config)
+            next-path (get-in body [:page :_links :next])
+            next-ret (lazy-cat ret (filter ancestor-pred (get-in body [:page :results] (list))))]
+        (if-not next-path
+          next-ret
+          (let [next-start (+ start content-request-limit)]
+            (recur next-start next-ret)))))))
 
 (defn- write-pages [pages attachments {:keys [confluence-url output]}]
   (doseq [p pages]
@@ -68,7 +57,7 @@
 (defn- ignored-media-type? [{:keys [mediaType]}]
   (#{"application/zip" "application/x-gzip"} mediaType))
 
-(defn- download-attachments [pages output confluence-url]
+(defn- download-attachments [pages {:keys [output confluence-url] :as config}]
   (let [attachment (fn [a] (utils/select-keys* a [[:title]
                                                   [:_links :download]
                                                   [:metadata :mediaType]
@@ -81,8 +70,8 @@
                                  (let [page-id (last (string/split container #"/"))
                                        f (utils/attachment-filename output page-id title)
                                        url (str confluence-url download)]
-                                   (utils/download-file url f)
-                                   (utils/attachment page-id title))))
+                                   (when (utils/download-file url f config)
+                                     (utils/attachment page-id title)))))
                          (into #{})
                          (doall))]
     (shutdown-agents)
@@ -93,7 +82,7 @@
     (log/infof "Exporting Confluence page %s - %s from: %s" space page confluence-url)
     (log/infof "Exporting Confluence space %s from: %s" space confluence-url))
   (let [pages (get-pages config)
-        attachments (download-attachments pages output confluence-url)]
+        attachments (download-attachments pages config)]
     (write-pages pages attachments config)
     (write-toc (toc/html pages) output)))
 
