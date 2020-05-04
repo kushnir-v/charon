@@ -13,7 +13,7 @@
                  [org.clojure/tools.logging "1.1.0"]
                  [org.jsoup/jsoup "1.13.1"]
                  [slingshot "0.12.2"]]
-  :main ^:skip-aot charon.core
+  :main charon.core
   :target-path "target/%s"
   :profiles {:debug {:debug true
                      :injections [(prn (into {} (System/getProperties)))]}
