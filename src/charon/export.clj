@@ -55,9 +55,6 @@
 (defn- write-toc [toc output]
   (utils/write-file (str output "/toc.xml") (h/html toc)))
 
-(defn- ignored-media-type? [{:keys [mediaType]}]
-  (#{"application/zip" "application/x-gzip"} mediaType))
-
 (defn- download-attachments [pages {:keys [output confluence-url] :as config}]
   (let [attachment (fn [a] (utils/select-keys* a [[:title]
                                                   [:_links :download]
@@ -66,7 +63,6 @@
         attachments (->> pages
                          (mapcat #(get-in % [:children :attachment :results]))
                          (map attachment)
-                         (remove ignored-media-type?)
                          (pmap (fn [{:keys [title download container]}]
                                  (let [page-id (last (string/split container #"/"))
                                        f (utils/attachment-filename output page-id title)
