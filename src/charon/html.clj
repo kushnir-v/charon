@@ -21,30 +21,34 @@
   (let [confluence-url-host (:host (uri/parse confluence-url))
         id->title (utils/id->title pages)]
     (doseq [a (.select doc "a")]
-      (let [{:keys [host path query]} (uri/parse (.attr a "href"))
+      (let [href (.attr a "href")
+            {:keys [host path query]} (uri/parse href)
             {:keys [pageId]} (uri/query-string->map query nil)
             title (get id->title pageId)]
-        (when (and path
+        (if (and path
                    (string/ends-with? path "/viewpage.action")
-                   (= confluence-url-host host))
-          (if title
-            (.attr a "href" (utils/filename title))
-            (log/warnf "Unresolvable link: %s" (.outerHtml a))))))))
+                   (= confluence-url-host host)
+                   title)
+          (.attr a "href" (utils/filename title))
+          (log/warnf "Unresolvable link: %s" href))))))
+
+(defn- img-attachment [img id attachments]
+  (let [class (.attr img "class")
+        title (-> (.attr img "src")
+                  uri/parse
+                  :path
+                  (string/split #"/")
+                  last)]
+    (when (string/includes? class "confluence-embedded-image")
+      (let [attachment (utils/attachment id title)]
+        (when (contains? attachments attachment)
+          attachment)))))
 
 (defn- rewrite-img [^Document doc id attachments]
-  (let [rewritable? (fn [img] (let [class (.attr img "class")]
-                                (string/includes? class "confluence-embedded-image")))]
-    (doseq [img (->> (.select doc "img")
-                     (filter rewritable?))]
-      (let [title (-> (.attr img "src")
-                      uri/parse
-                      :path
-                      (string/split #"/")
-                      last)
-            attachment (utils/attachment id title)]
-        (if (contains? attachments attachment)
-          (.attr img "src" (utils/attachment-filename attachment))
-          (log/warnf "Unresolvable image: %s" (.outerHtml img)))))))
+  (doseq [img (.select doc "img")]
+    (if-let [attachment (img-attachment img id attachments)]
+      (.attr img "src" (utils/attachment-filename attachment))
+      (log/warnf "Unresolvable image: %s" (.attr img "src")))))
 
 (defn process
   "Converts HTML document to XHTML, appends some metadata and processes internal links."
