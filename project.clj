@@ -8,6 +8,7 @@
                  [cheshire "5.10.0"]
                  [ch.qos.logback/logback-classic "1.2.3"]
                  [clj-http "3.10.1"]
+                 [com.grammarly/perseverance "0.1.3"]
                  [hiccup "1.0.5"]
                  [lambdaisland/uri "1.3.45"]
                  [org.clojure/tools.cli "1.0.194"]

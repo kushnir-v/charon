@@ -51,7 +51,7 @@
   [content id title attachments pages confluence-url]
   (let [doc (Jsoup/parseBodyFragment content)
         _ (-> (.outputSettings doc)
-              (.escapeMode Entities$EscapeMode/xhtml))]
+              (.escapeMode Entities$EscapeMode/base))]
     (append-meta doc id title)
     (rewrite-a doc pages confluence-url)
     (rewrite-img doc id attachments)

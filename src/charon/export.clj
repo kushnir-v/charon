@@ -5,6 +5,7 @@
             [charon.toc :as toc]
             [charon.utils :as utils]
             [hiccup.core :as h]
+            [perseverance.core :as perseverance]
             [slingshot.slingshot :refer [throw+]]))
 
 ;; TODO: Retries
@@ -77,14 +78,26 @@
     (shutdown-agents)
     attachments))
 
+(defn- log-retry
+  "Prints a message to stdout that an error happened and going to be retried."
+  [wrapped-ex attempt delay]
+  (log/infof "%s, retrying in %.1f seconds... (%d)"
+             (:e (ex-data wrapped-ex))
+             (/ delay 1000.0)
+             attempt))
+
 (defn- export [{:keys [confluence-url space page output] :as config}]
   (if page
     (log/infof "Exporting Confluence page %s - %s from: %s" space page confluence-url)
     (log/infof "Exporting Confluence space %s from: %s" space confluence-url))
-  (let [pages (get-pages config)
-        attachments (download-attachments pages config)]
-    (write-pages pages attachments config)
-    (write-toc (toc/html pages) output)))
+
+  (perseverance/retry {:strategy (perseverance/progressive-retry-strategy :max-count 3 :initial-delay 10000)
+                       :selector ::utils/http-request
+                       :log-fn log-retry}
+    (let [pages (get-pages config)
+          attachments (download-attachments pages config)]
+      (write-pages pages attachments config)
+      (write-toc (toc/html pages) output))))
 
 (defn run [options]
   (-> (check-config options)

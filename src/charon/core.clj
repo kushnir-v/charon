@@ -2,7 +2,8 @@
   (:require [charon.export :as export]
             [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [charon.utils :as utils])
   (:gen-class))
 
 (def run export/run)
@@ -13,9 +14,11 @@
   [["-o" "--output OUTPUT" "Output directory"
     :missing "Output directory (--output) is required"]
    [nil "--space-url SPACE_URL" "Confluence space URL"
-    :id :space-url]
+    :id :space-url
+    :parse-fn utils/url-decode]
    [nil "--page-url PAGE_URL" "Confluence page URL"
-    :id :page-url]
+    :id :page-url
+    :parse-fn utils/url-decode]
    ["-u" "--user USER" "Username"
     :validate-fn not-blank
     :validate-msg "Username (if passed) cannot be blank"]

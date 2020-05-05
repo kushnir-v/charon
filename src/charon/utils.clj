@@ -3,15 +3,18 @@
             [clj-http.client :as client]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [slingshot.slingshot :refer [throw+]]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [perseverance.core :as perseverance]
+            [slingshot.slingshot :refer [throw+]])
   (:import (java.io File)
            (java.net URLDecoder)
            (java.nio.charset StandardCharsets)))
 
+(defn url-decode [s] (URLDecoder/decode s (.name StandardCharsets/UTF_8)))
+
 (defn- normalize-title [title]
   (-> title
-      (URLDecoder/decode (.name StandardCharsets/UTF_8))
+      (url-decode)
       (string/lower-case)
       (string/replace #"[^\p{L}\d\.]" "-")))
 
@@ -81,15 +84,16 @@
   config)
 
 (defn- get-body [url r {:keys [user password]}]
-  (let [opts (-> r
-                 (merge {:socket-timeout 10000 :connection-timeout 10000})
-                 (conj (when password [:basic-auth [user password]])))
-        {:keys [status body] :as resp} (client/get url opts)]
-    (if-not (= status 200)
-      (throw+ {:type    ::request-failed
-               :message "HTTP request to Confluence failed"
-               :context resp})
-      body)))
+  (perseverance/retriable {:catch [Exception] :tag ::http-request}
+    (let [opts (-> r
+                   (merge {:socket-timeout 10000 :connection-timeout 10000})
+                   (conj (when password [:basic-auth [user password]])))
+          {:keys [status body] :as resp} (client/get url opts)]
+      (if-not (= status 200)
+        (throw+ {:type    ::request-failed
+                 :message "HTTP request to Confluence failed"
+                 :context resp})
+        body))))
 
 (defn get-json [url r config]
   (json/parse-string (get-body url r config) true))
