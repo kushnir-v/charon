@@ -82,13 +82,13 @@
   (utils/write-file (str output "/toc.xml") (h/html toc)))
 
 (defn- download-attachments [attachments attachment->url {:keys [output] :as config}]
-  (->> attachments
-       (pmap (fn [attachment]
-               (let [f (utils/attachment-filename output attachment)
-                     url (get attachment->url attachment)]
-                 (utils/download-file url f config))))
-       (doall))
-  (shutdown-agents))
+  (let [_ (->> attachments
+               (pmap (fn [attachment]
+                       (let [f (utils/attachment-filename output attachment)
+                             url (get attachment->url attachment)]
+                         (utils/download-file url f config))))
+               (doall))]
+    (shutdown-agents)))
 
 (defn- log-retry
   "Prints a message to stdout that an error happened and going to be retried."
