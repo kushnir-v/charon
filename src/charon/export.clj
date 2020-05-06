@@ -25,7 +25,7 @@
 (def content-request-limit 25)
 (def content-request-expand (string/join "," ["ancestors" "body.export_view" "children.page" "children.attachment"]))
 
-(defn- get-pages [{:keys [confluence-url space page] :as config}]
+(defn- get-pages [{:keys [confluence-url space] :as config}]
   (let [url (format "%s/rest/api/space/%s/content" confluence-url space)]
     (loop [start 0 ret (list)]
       (log/infof "Downloading %d pages starting from: %d" content-request-limit start)

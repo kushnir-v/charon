@@ -81,14 +81,6 @@
       (make-dirs attachments-dir)))
   config)
 
-(defn- log-retry
-  "Prints a message to stdout that an error happened and going to be retried."
-  [wrapped-ex attempt delay]
-  (log/infof "%s, retrying in %.1f seconds... (%d)"
-             (:e (ex-data wrapped-ex))
-             (/ delay 1000.0)
-             attempt))
-
 (defn- get-body [url r {:keys [user password]}]
   (let [opts (-> r
                  (merge {:socket-timeout 10000 :connection-timeout 10000})
