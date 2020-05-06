@@ -1,38 +1,80 @@
 (ns charon.html
-  (:require [clojure.string :as string]
+  (:require [clojure.set :as set]
+            [clojure.string :as string]
             [clojure.tools.logging :as log]
             [charon.utils :as utils]
             [lambdaisland.uri :as uri])
   (:import (org.jsoup Jsoup)
            (org.jsoup.nodes Document Entities$EscapeMode)))
 
-(defn- append-meta [^Document doc id title]
+(defn- append-meta [^Document doc page-id title]
   (let [title (-> (.createElement doc "title")
                   (.text title))
         page-id-meta (-> (.createElement doc "meta")
                          (.attr "name" "page-id")
-                         (.attr "content" id)
+                         (.attr "content" page-id)
                          (.text ""))]
     (-> (.head doc)
         (.appendChild title)
         (.appendChild page-id-meta))))
 
-(defn- rewrite-a [^Document doc pages confluence-url]
-  (let [confluence-url-host (:host (uri/parse confluence-url))
-        id->title (utils/id->title pages)]
-    (doseq [a (.select doc "a")]
-      (let [href (.attr a "href")
-            {:keys [host path query]} (uri/parse href)
-            {:keys [pageId]} (uri/query-string->map query nil)
-            title (get id->title pageId)]
-        (if (and path
-                   (string/ends-with? path "/viewpage.action")
-                   (= confluence-url-host host)
-                   title)
-          (.attr a "href" (utils/filename title))
-          (log/warnf "Unresolvable link: %s" href))))))
+(defn a-attachment [a space-attachments]
+  (let [href (.attr a "href")]
+    (when (string/starts-with? href "/download/attachments/")
+      (let [[page-id title & _] (-> href
+                                    (string/replace-first "/download/attachments/" "")
+                                    uri/parse
+                                    :path
+                                    (string/split #"/"))
+            attachment (utils/attachment page-id title)]
+        (when (contains? space-attachments attachment)
+          attachment)))))
 
-(defn- img-attachment [img id attachments]
+(defn- a-page-title [a confluence-url id->title]
+  (let [href (.attr a "href")
+        {:keys [host path query]} (uri/parse href)
+        {:keys [pageId]} (uri/query-string->map query nil)]
+    (when (and path
+               (string/ends-with? path "/viewpage.action")
+               ;; Same Confluence host?
+               (or (string/starts-with? href "/")
+                   (string/starts-with? host confluence-url)))
+      (get id->title pageId))))
+
+(defn- rewrite-a* [a space-attachments confluence-url id->title]
+  (let [href (-> (.attr a "href")
+                 string/trim)
+        attachment (a-attachment a space-attachments)
+        title (a-page-title a confluence-url id->title)]
+    (if-let [res (cond
+                   ;; Blank link
+                   (string/blank? href) href
+                   ;; Page internal anchor
+                   (string/starts-with? href "#") href
+                   ;; Attachment
+                   attachment (utils/attachment-filename attachment)
+                   ;; Internal page
+                   title (utils/filename title)
+                   ;; Internal link
+                   (string/starts-with? href "/") (str (uri/join confluence-url href))
+                   ;; External link
+                   (re-find #"^http(s)?://" href) href)]
+      (do
+        (.attr a "href" res)
+        attachment)
+      (log/infof "Unresolvable link: %s" href))))
+
+(defn- rewrite-a [^Document doc pages space-attachments confluence-url]
+  (let [id->title (utils/id->title pages)]
+    (reduce
+      (fn [res a]
+        (if-let [attachment (rewrite-a* a space-attachments confluence-url id->title)]
+          (conj res attachment)
+          res))
+      #{}
+      (.select doc "a"))))
+
+(defn- img-attachment [img page-id space-attachments]
   (let [class (.attr img "class")
         title (-> (.attr img "src")
                   uri/parse
@@ -40,23 +82,47 @@
                   (string/split #"/")
                   last)]
     (when (string/includes? class "confluence-embedded-image")
-      (let [attachment (utils/attachment id title)]
-        (when (contains? attachments attachment)
+      (let [attachment (utils/attachment page-id title)]
+        (when (contains? space-attachments attachment)
           attachment)))))
 
-(defn- rewrite-img [^Document doc id attachments]
-  (doseq [img (.select doc "img")]
-    (if-let [attachment (img-attachment img id attachments)]
-      (.attr img "src" (utils/attachment-filename attachment))
-      (log/warnf "Unresolvable image: %s" (.attr img "src")))))
+(defn- rewrite-img* [img page-id space-attachments confluence-url]
+  (let [src (-> (.attr img "src")
+                string/trim)
+        attachment (img-attachment img page-id space-attachments)]
+    (if-let [res (cond
+                   ;; Embedded attached image
+                   attachment (utils/attachment-filename attachment)
+                   ;; Internal image
+                   (string/starts-with? src "/") (str (uri/join confluence-url src))
+                   ;; External image
+                   (re-find #"^http(s)?://" src) src)]
+      (do
+        (.attr img "src" res)
+        attachment)
+      (log/warnf "Unresolvable image: %s" src))))
 
+(defn- rewrite-img [^Document doc page-id space-attachments confluence-url]
+  (reduce
+    (fn [res img]
+      (if-let [attachment (rewrite-img* img page-id space-attachments confluence-url)]
+        (conj res attachment)
+        res))
+    #{}
+    (.select doc "img")))
+
+(defrecord ContentWithAttachments [content attachments])
+
+;; TODO: Check if we can remove space-attachments from process parameters
 (defn process
-  "Converts HTML document to XHTML, appends some metadata and processes internal links."
-  [content id title attachments pages confluence-url]
+  "Parses HTML document, appends metadata and rewrites internal links in images and anchors.
+
+  Returns a map containing the resulting HTML string and the referenced attachments."
+  [content page-id title pages space-attachments confluence-url]
   (let [doc (Jsoup/parseBodyFragment content)
         _ (-> (.outputSettings doc)
-              (.escapeMode Entities$EscapeMode/base))]
-    (append-meta doc id title)
-    (rewrite-a doc pages confluence-url)
-    (rewrite-img doc id attachments)
-    (.outerHtml doc)))
+              (.escapeMode Entities$EscapeMode/base))
+        _ (append-meta doc page-id title)
+        attachments (set/union (rewrite-a doc pages space-attachments confluence-url)
+                               (rewrite-img doc page-id space-attachments confluence-url))]
+    (->ContentWithAttachments (.outerHtml doc) attachments)))

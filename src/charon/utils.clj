@@ -4,7 +4,7 @@
             [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
-            [perseverance.core :as perseverance]
+            [perseverance.core :refer [retriable]]
             [slingshot.slingshot :refer [throw+]])
   (:import (java.io File)
            (java.net URLDecoder)
@@ -34,10 +34,8 @@
 (defn attachment-filename
   ([^Attachment attachment]
    (str attachments-dirname "/" (.file-name attachment)))
-  ([output page-id title]
-   (string/join "/" [output
-                     attachments-dirname
-                     (.file-name (attachment page-id title))])))
+  ([output ^Attachment attachment]
+   (string/join "/" [output attachments-dirname (.file-name attachment)])))
 
 (defn filename
   ([title]
@@ -83,37 +81,41 @@
       (make-dirs attachments-dir)))
   config)
 
+(defn- log-retry
+  "Prints a message to stdout that an error happened and going to be retried."
+  [wrapped-ex attempt delay]
+  (log/infof "%s, retrying in %.1f seconds... (%d)"
+             (:e (ex-data wrapped-ex))
+             (/ delay 1000.0)
+             attempt))
+
 (defn- get-body [url r {:keys [user password]}]
-  (perseverance/retriable {:catch [Exception] :tag ::http-request}
-    (let [opts (-> r
-                   (merge {:socket-timeout 10000 :connection-timeout 10000})
-                   (conj (when password [:basic-auth [user password]])))
-          {:keys [status body] :as resp} (client/get url opts)]
-      (if-not (= status 200)
-        (throw+ {:type    ::request-failed
-                 :message "HTTP request to Confluence failed"
-                 :context resp})
-        body))))
+  (let [opts (-> r
+                 (merge {:socket-timeout 10000 :connection-timeout 10000})
+                 (conj (when password [:basic-auth [user password]])))
+        {:keys [status body] :as resp} (client/get url opts)]
+    (if-not (= status 200)
+      (throw+ {:type    ::request-failed
+               :message "HTTP request to Confluence failed"
+               :context resp})
+      body)))
 
 (defn get-json [url r config]
-  (json/parse-string (get-body url r config) true))
+  (retriable {:catch [Exception]
+              :tag   ::http-request}
+    (json/parse-string (get-body url r config) true)))
 
 (defn download-file [url f config]
   (try
     (log/infof "Writing: %s" f)
-    (clojure.java.io/copy
-      (get-body url {:as :stream} config)
-      (io/file f))
-    true
+    (retriable {:catch [Exception]
+                :tag   ::download-file}
+      (clojure.java.io/copy
+        (get-body url {:as :stream} config)
+        (io/file f)))
     (catch Exception e
-      (log/warnf e "Cannot download file: %s" url)
-      nil)))
+      (log/warnf e "Cannot download file: %s" url))))
 
 (defn write-file [f content]
   (log/infof "Writing: %s" f)
   (spit f content :encoding "UTF-8"))
-
-(defn select-keys* [m paths]
-  (into {} (map (fn [p]
-                  [(last p) (get-in m p)]))
-        paths))

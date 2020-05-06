@@ -1,15 +1,19 @@
 (ns charon.export
-  (:require [clojure.string :as string]
+  (:require [clojure.set :as set]
+            [clojure.string :as string]
             [clojure.tools.logging :as log]
             [charon.html :as html]
             [charon.toc :as toc]
             [charon.utils :as utils]
             [hiccup.core :as h]
-            [perseverance.core :as perseverance]
-            [slingshot.slingshot :refer [throw+]]))
+            [perseverance.core :refer [retry progressive-retry-strategy]]
+            [slingshot.slingshot :refer [throw+]])
+  (:import (clojure.lang ExceptionInfo)))
 
 ;; TODO: Retries
 ;; TODO: Memory footprint?
+;; TODO: Too many options passed here and there. Extract them in a state?
+;; TODO: REPL workflow
 
 (defn- check-config [{:keys [confluence-url output space] :as m}]
   (if (some nil? [confluence-url output space])
@@ -21,7 +25,23 @@
 (def content-request-limit 25)
 (def content-request-expand (string/join "," ["ancestors" "body.export_view" "children.page" "children.attachment"]))
 
-(defn- ancestor-or-self= [title]
+(defn- get-pages [{:keys [confluence-url space page] :as config}]
+  (let [url (format "%s/rest/api/space/%s/content" confluence-url space)]
+    (loop [start 0 ret (list)]
+      (log/infof "Downloading %d pages starting from: %d" content-request-limit start)
+      (let [query-params {:type "page" :start start :limit content-request-limit :expand content-request-expand}
+            body (utils/get-json url {:accept :json :query-params query-params} config)
+            next-path (get-in body [:page :_links :next])
+            next-ret (lazy-cat ret (get-in body [:page :results] (list)))]
+        (if-not next-path
+          next-ret
+          (let [next-start (+ start content-request-limit)]
+            (recur next-start next-ret)))))))
+
+(defn- ancestor-or-self=
+  "Returns a predicate that matches the `--page-url` or its descendants,
+  and for `--space-url`, returns `true`."
+  [title]
   (if title
     (fn [page] (let [titles (->> (:ancestors page)
                                  (map :title)               ;; Ancestors titles
@@ -29,50 +49,46 @@
                  (contains? titles title)))
     (constantly true)))
 
-(defn- get-pages [{:keys [confluence-url space page] :as config}]
-  (let [url (format "%s/rest/api/space/%s/content" confluence-url space)
-        ancestor-pred (ancestor-or-self= page)]
-    (loop [start 0 ret (list)]
-      (log/infof "Downloading %d pages starting from: %d" content-request-limit start)
-      (let [query-params {:type "page" :start start :limit content-request-limit :expand content-request-expand}
-            body (utils/get-json url {:accept :json :query-params query-params} config)
-            next-path (get-in body [:page :_links :next])
-            next-ret (lazy-cat ret (filter ancestor-pred (get-in body [:page :results] (list))))]
-        (if-not next-path
-          next-ret
-          (let [next-start (+ start content-request-limit)]
-            (recur next-start next-ret)))))))
+(defn- attachment->url
+  "Returns a set of all attachments in the confluence space."
+  [pages confluence-url]
+  (let [attachment-url (fn [a] (let [title (:title a)
+                                     download (get-in a [:_links :download])
+                                     page-id (-> (get-in a [:_expandable :container])
+                                                 (string/split #"/")
+                                                 last)
+                                     url (str confluence-url download)]
+                                 [(utils/attachment page-id title) url]))]
+    (->> pages
+         (mapcat #(get-in % [:children :attachment :results]))
+         (map attachment-url)
+         (into {}))))
 
-(defn- write-pages [pages attachments {:keys [confluence-url output]}]
-  (doseq [p pages]
-    (let [{:keys [id title]} p
-          content (-> (get-in p [:body :export_view :value])
-                      ;; TODO: Too many options passed here and there. Extract them in a state?
-                      (html/process id title attachments pages confluence-url))
-          f (utils/filename output title)]
-      (utils/write-file f content))))
+(defn- write-pages
+  "Processes pages, writes them to disc and returns a set of referenced attachments."
+  [pages space-attachments {:keys [output confluence-url]}]
+  (reduce
+    (fn [res p]
+      (let [{:keys [id title]} p
+            {:keys [content attachments]} (-> (get-in p [:body :export_view :value])
+                                              (html/process id title pages space-attachments confluence-url))
+            f (utils/filename output title)]
+        (utils/write-file f content)
+        (set/union res attachments)))
+    #{}
+    pages))
 
 (defn- write-toc [toc output]
   (utils/write-file (str output "/toc.xml") (h/html toc)))
 
-(defn- download-attachments [pages {:keys [output confluence-url] :as config}]
-  (let [attachment (fn [a] (utils/select-keys* a [[:title]
-                                                  [:_links :download]
-                                                  [:metadata :mediaType]
-                                                  [:_expandable :container]]))
-        attachments (->> pages
-                         (mapcat #(get-in % [:children :attachment :results]))
-                         (map attachment)
-                         (pmap (fn [{:keys [title download container]}]
-                                 (let [page-id (last (string/split container #"/"))
-                                       f (utils/attachment-filename output page-id title)
-                                       url (str confluence-url download)]
-                                   (when (utils/download-file url f config)
-                                     (utils/attachment page-id title)))))
-                         (into #{})
-                         (doall))]
-    (shutdown-agents)
-    attachments))
+(defn- download-attachments [attachments attachment->url {:keys [output] :as config}]
+  (->> attachments
+       (pmap (fn [attachment]
+               (let [f (utils/attachment-filename output attachment)
+                     url (get attachment->url attachment)]
+                 (utils/download-file url f config))))
+       (doall))
+  (shutdown-agents))
 
 (defn- log-retry
   "Prints a message to stdout that an error happened and going to be retried."
@@ -82,17 +98,26 @@
              (/ delay 1000.0)
              attempt))
 
+(defn- tags-in? [coll]
+  (fn [e] (and (instance? ExceptionInfo e)
+               (contains? coll (:tag (ex-data e))))))
+
 (defn- export [{:keys [confluence-url space page output] :as config}]
   (if page
     (log/infof "Exporting Confluence page %s - %s from: %s" space page confluence-url)
     (log/infof "Exporting Confluence space %s from: %s" space confluence-url))
 
-  (perseverance/retry {:strategy (perseverance/progressive-retry-strategy :max-count 3 :initial-delay 10000)
-                       :selector ::utils/http-request
-                       :log-fn log-retry}
-    (let [pages (get-pages config)
-          attachments (download-attachments pages config)]
-      (write-pages pages attachments config)
+  (retry {:strategy (progressive-retry-strategy :max-count 3 :initial-delay 10000)
+          :selector (tags-in? #{::utils/http-request ::utils/download-file})
+          :log-fn   log-retry}
+    (let [space-pages (get-pages config)
+          attachment->url (attachment->url space-pages confluence-url)
+          space-attachments (set (keys attachment->url))
+          pages (filter (ancestor-or-self= page) space-pages)
+          attachments (write-pages pages space-attachments config)]
+      ;; If --page-url is provided, download only referenced attachments.
+      (download-attachments
+        (if page attachments space-attachments) attachment->url config)
       (write-toc (toc/html pages) output))))
 
 (defn run [options]
