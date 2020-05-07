@@ -38,7 +38,7 @@
                (string/ends-with? path "/viewpage.action")
                ;; Same Confluence host?
                (or (string/starts-with? href "/")
-                   (string/starts-with? host confluence-url)))
+                   (string/includes? confluence-url (str "://" host))))
       (get id->title pageId))))
 
 (defn- rewrite-a* [a space-attachments confluence-url id->title]

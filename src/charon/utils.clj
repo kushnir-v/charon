@@ -55,6 +55,9 @@
 (defn id->title [pages]
   (into {} (map (juxt :id :title) pages)))
 
+(defn title->page [pages]
+  (into {} (map (juxt :title identity) pages)))
+
 (defn make-dirs [^File f]
   (log/infof "Creating folder: %s" f)
   (.mkdirs f))

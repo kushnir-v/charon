@@ -4,7 +4,6 @@
   :license {:name "GNU GENERAL PUBLIC LICENSE v3"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.10.1"]
-                 [aysylu/loom "1.0.2"]
                  [cheshire "5.10.0"]
                  [ch.qos.logback/logback-classic "1.2.3"]
                  [clj-http "3.10.1"]

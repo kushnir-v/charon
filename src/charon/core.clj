@@ -57,6 +57,7 @@
       (not (string/includes? content-url "/display/"))
       {:exit-message "Unknown content URL format"}
 
+      ;; TODO: Rename page to page-title and space to space-key for disambiguation.
       :else (let [[confluence-url path] (string/split content-url #"/display/" 2)
                   [space page & _] (string/split path #"/" 3)
                   res (assoc m :confluence-url confluence-url :space space)]

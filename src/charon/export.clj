@@ -2,8 +2,8 @@
   (:require [clojure.set :as set]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
+            [charon.structure :as structure]
             [charon.html :as html]
-            [charon.toc :as toc]
             [charon.utils :as utils]
             [hiccup.core :as h]
             [perseverance.core :refer [retry progressive-retry-strategy]]
@@ -37,17 +37,6 @@
           next-ret
           (let [next-start (+ start content-request-limit)]
             (recur next-start next-ret)))))))
-
-(defn- ancestor-or-self=
-  "Returns a predicate that matches the `--page-url` or its descendants,
-  and for `--space-url`, returns `true`."
-  [title]
-  (if title
-    (fn [page] (let [titles (->> (:ancestors page)
-                                 (map :title)               ;; Ancestors titles
-                                 (into #{(:title page)}))]  ;; Self title
-                 (contains? titles title)))
-    (constantly true)))
 
 (defn- attachment->url
   "Returns a set of all attachments in the confluence space."
@@ -113,12 +102,12 @@
     (let [space-pages (get-pages config)
           attachment->url (attachment->url space-pages confluence-url)
           space-attachments (set (keys attachment->url))
-          pages (filter (ancestor-or-self= page) space-pages)
+          pages (if page (structure/subtree-pages space-pages page) space-pages)
           attachments (write-pages pages space-attachments config)]
       ;; If --page-url is provided, download only referenced attachments.
       (download-attachments
         (if page attachments space-attachments) attachment->url config)
-      (write-toc (toc/html pages) output))))
+      (write-toc (structure/toc-html pages) output))))
 
 (defn run [options]
   (-> (check-config options)
