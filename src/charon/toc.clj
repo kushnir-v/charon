@@ -21,28 +21,28 @@
       (let [roots (set/difference (:nodeset graph) (persistent! child-ids))]
         {:graph graph :roots roots}))))
 
-(defn- branch [id graph id->position]
+(defn- branch [id graph id->sort-key]
   (let [children (get (:adj graph) id)
         ret [id]]
     (if (seq children)
       (->> children
-           (sort-by id->position)
-           (mapv #(branch % graph id->position))
+           (sort-by id->sort-key)
+           (mapv #(branch % graph id->sort-key))
            (into ret))
       ret)))
 
-(defn- page-position [page]
-  (let [position (get-in page [:extensions :position] ##Inf)]
+(defn- page-position-with-title [page]
+  (let [position (get-in page [:extensions :position])]
     ;; Can be, for example, "none".
-    (if (number? position) position ##Inf)))
+    [(if (number? position) position ##Inf) (:title page)]))
 
 (defn- tree [pages {:keys [graph roots]}]
-  (let [id->position (->> pages
-                          (map (juxt :id page-position))
+  (let [id->sort-key (->> pages
+                          (map (juxt :id page-position-with-title))
                           (into {}))]
     (->> roots
-         (sort-by id->position)
-         (mapv #(branch % graph id->position)))))
+         (sort-by id->sort-key)
+         (mapv #(branch % graph id->sort-key)))))
 
 (defn- nav [pages]
   (let [id->title (utils/id->title pages)]
