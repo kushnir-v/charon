@@ -19,12 +19,12 @@
    [nil "--page-url PAGE_URL" "Confluence page URL"
     :id :page-url
     :parse-fn utils/url-decode]
-   ["-u" "--user USER" "Username"
+   ["-u" "--username USERNAME" "Username"
     :validate-fn not-blank
-    :validate-msg "Username (if passed) cannot be blank"]
+    :validate-msg "Username cannot be blank"]
    ["-p" "--password PASSWORD" "Password"
     :validate-fn not-blank
-    :validate-msg "Password (if passed) cannot be blank"]
+    :validate-msg "Password cannot be blank"]
    ["-h" "--help"]])
 
 (defn- enrich-opts

@@ -1,4 +1,4 @@
-(defproject charon "0.1.2-SNAPSHOT"
+(defproject charon "0.1.3-SNAPSHOT"
   :description "Console utility for exporting spaces from Confluence"
   :url "https://github.com/shapiy/charon"
   :license {:name "GNU GENERAL PUBLIC LICENSE v3"

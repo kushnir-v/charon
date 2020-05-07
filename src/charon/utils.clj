@@ -81,10 +81,10 @@
       (make-dirs attachments-dir)))
   config)
 
-(defn- get-body [url r {:keys [user password]}]
+(defn- get-body [url r {:keys [username password]}]
   (let [opts (-> r
                  (merge {:socket-timeout 10000 :connection-timeout 10000})
-                 (conj (when password [:basic-auth [user password]])))
+                 (conj (when password [:basic-auth [username password]])))
         {:keys [status body] :as resp} (client/get url opts)]
     (if-not (= status 200)
       (throw+ {:type    ::request-failed
