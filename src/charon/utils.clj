@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
+            [lambdaisland.uri :as uri]
             [perseverance.core :refer [retriable]]
             [slingshot.slingshot :refer [throw+]])
   (:import (java.io File)
@@ -84,10 +85,22 @@
       (make-dirs attachments-dir)))
   config)
 
+(defn- debug-get-body [url opts]
+  (let [url-str (-> (uri/uri url)
+                    (assoc :query (uri/map->query-string (:query-params opts)))
+                    str)
+        basic-auth (:basic-auth opts)
+        command (concat ["curl" "-XGET"]
+                        (when basic-auth
+                          ["-u" (string/join ":" basic-auth)])
+                        [(str "'" url-str "'")])]
+    (log/debug (string/join " " command))))
+
 (defn- get-body [url r {:keys [username password]}]
   (let [opts (-> r
                  (merge {:socket-timeout 10000 :connection-timeout 10000})
                  (conj (when password [:basic-auth [username password]])))
+        _ (debug-get-body url opts)
         {:keys [status body] :as resp} (client/get url opts)]
     (if-not (= status 200)
       (throw+ {:type    ::request-failed

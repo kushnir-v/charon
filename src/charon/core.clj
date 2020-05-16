@@ -4,7 +4,9 @@
             [clojure.tools.cli :refer [parse-opts]]
             [clojure.tools.logging :as log]
             [charon.utils :as utils])
-  (:gen-class))
+  (:gen-class)
+  (:import (org.slf4j LoggerFactory Logger)
+           (ch.qos.logback.classic Level)))
 
 (def run export/run)
 
@@ -25,6 +27,7 @@
    ["-p" "--password PASSWORD" "Password"
     :validate-fn not-blank
     :validate-msg "Password cannot be blank"]
+   ["-d" "--debug"]
    ["-h" "--help"]])
 
 (defn- enrich-opts
@@ -82,6 +85,10 @@
     (log/log level msg)
     (System/exit status)))
 
+(defn enable-debug []
+  (.setLevel
+    (LoggerFactory/getLogger (Logger/ROOT_LOGGER_NAME)) Level/DEBUG))
+
 (defn -main
   [& args]
   (log/infof "Running with arguments: %s" args)
@@ -89,6 +96,8 @@
     (if exit-message
       (exit (if ok? 0 1) exit-message)
       (try
+        (when (:debug options)
+          (enable-debug))
         (time (run options))
         (log/info "Done")
         (catch Exception e
