@@ -18,13 +18,18 @@
         (.appendChild title)
         (.appendChild page-id-meta))))
 
-(defn a-attachment [a space-attachments]
-  (let [href (.attr a "href")]
-    (when (string/starts-with? href "/download/attachments/")
-      (let [[page-id title & _] (-> href
+(defn- same-host? [href host confluence-url]
+  (or (string/starts-with? href "/")
+      (string/includes? confluence-url (str "://" host))))
+
+(defn- a-attachment [a space-attachments confluence-url]
+  (let [href (.attr a "href")
+        {:keys [host path]} (uri/parse href)]
+    (when (and path
+               (string/starts-with? path "/download/attachments/")
+               (same-host? href host confluence-url))
+      (let [[page-id title & _] (-> path
                                     (string/replace-first "/download/attachments/" "")
-                                    uri/parse
-                                    :path
                                     (string/split #"/"))
             attachment (utils/attachment page-id title)]
         (when (contains? space-attachments attachment)
@@ -36,15 +41,13 @@
         {:keys [pageId]} (uri/query-string->map query nil)]
     (when (and path
                (string/ends-with? path "/viewpage.action")
-               ;; Same Confluence host?
-               (or (string/starts-with? href "/")
-                   (string/includes? confluence-url (str "://" host))))
+               (same-host? href host confluence-url))
       (get id->title pageId))))
 
 (defn- rewrite-a* [a space-attachments confluence-url id->title]
   (let [href (-> (.attr a "href")
                  string/trim)
-        attachment (a-attachment a space-attachments)
+        attachment (a-attachment a space-attachments confluence-url)
         title (a-page-title a confluence-url id->title)]
     (if-let [res (cond
                    ;; Blank link
