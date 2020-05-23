@@ -2,6 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
+            [charon.models :as models]
             [charon.utils :as utils]
             [lambdaisland.uri :as uri])
   (:import (org.jsoup Jsoup)
@@ -114,18 +115,16 @@
     #{}
     (.select doc "img")))
 
-(defrecord ContentWithAttachments [content attachments])
-
 ;; TODO: Check if we can remove space-attachments from process parameters
 (defn process
   "Parses HTML document, appends metadata and rewrites internal links in images and anchors.
 
   Returns a map containing the resulting HTML string and the referenced attachments."
-  [content page-id title pages space-attachments confluence-url]
+  [content page-id title {:keys [confluence-url pages space-attachments]}]
   (let [doc (Jsoup/parseBodyFragment content)
         _ (-> (.outputSettings doc)
               (.escapeMode Entities$EscapeMode/base))
         _ (append-meta doc page-id title)
         attachments (set/union (rewrite-a doc pages space-attachments confluence-url)
                                (rewrite-img doc page-id space-attachments confluence-url))]
-    (->ContentWithAttachments (.outerHtml doc) attachments)))
+    (models/->ContentWithAttachments (.outerHtml doc) attachments)))

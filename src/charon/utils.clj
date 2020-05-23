@@ -1,5 +1,6 @@
 (ns charon.utils
-  (:require [cheshire.core :as json]
+  (:require [charon.models :as models]
+            [cheshire.core :as json]
             [clj-http.client :as client]
             [clojure.java.io :as io]
             [clojure.string :as string]
@@ -19,23 +20,15 @@
       (string/lower-case)
       (string/replace #"[^\p{L}\d\.]" "-")))
 
-(defprotocol Resource
-  (file-name [_]))
-
-(defrecord Attachment [page-id title]
-  Resource
-  (file-name [a]
-    (format "%s-%s" (.page-id a) title)))
-
 (defn attachment [page-id title]
-  (->Attachment page-id (normalize-title title)))
+  (models/->Attachment page-id (normalize-title title)))
 
 (def attachments-dirname "files")
 
 (defn attachment-filename
-  ([^Attachment attachment]
+  ([attachment]
    (str attachments-dirname "/" (.file-name attachment)))
-  ([output ^Attachment attachment]
+  ([output attachment]
    (string/join "/" [output attachments-dirname (.file-name attachment)])))
 
 (defn filename

@@ -13,18 +13,20 @@
                  [org.clojure/tools.cli "1.0.194"]
                  [org.clojure/tools.logging "1.1.0"]
                  [org.jsoup/jsoup "1.13.1"]
+                 [prismatic/schema "1.1.12"]
+                 [metosin/schema-tools "0.12.2"]
                  [slingshot "0.12.2"]]
   :main charon.core
   :target-path "target/%s"
-  :profiles {:debug {:debug true
-                     :injections [(prn (into {} (System/getProperties)))]}
+  :profiles {:debug   {:debug      true
+                       :injections [(prn (into {} (System/getProperties)))]}
              :dev     {:source-paths ["dev"]
                        :plugins      [[camechis/deploy-uberjar "0.3.0"]
                                       [jonase/eastwood "0.3.10"]
                                       [lein-eftest "0.5.9"]]
                        :dependencies [[org.clojure/tools.namespace "1.0.0"]]}
              :uberjar {:aot :all}}
-  :repositories [["github" {:url "https://maven.pkg.github.com/shapiy/charon"
+  :repositories [["github" {:url      "https://maven.pkg.github.com/shapiy/charon"
                             :username "shapiy"
                             :password :env/github_token}]]
   :repl-options {:init-ns user})

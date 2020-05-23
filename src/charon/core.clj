@@ -101,4 +101,6 @@
         (time (run options))
         (log/info "Done")
         (catch Exception e
-          (exit 2 (format "Failed: %s" (.getMessage e))))))))
+          (if (:debug options)
+            (throw e)
+            (exit 2 (format "Failed: %s" (.getMessage e)))))))))
