@@ -58,9 +58,8 @@
   [{:keys [output pages] :as ctx}]
   (reduce
     (fn [res p]
-      (let [{:keys [id title]} p
-            {:keys [content attachments]} (-> (get-in p [:body :export_view :value])
-                                              (html/process id title ctx))
+      (let [{:keys [content attachments]} (html/process p ctx)
+            {:keys [title]} p
             f (utils/filename output title)]
         (utils/write-file f content)
         (set/union res attachments)))

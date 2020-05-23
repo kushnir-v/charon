@@ -8,16 +8,24 @@
   (:import (org.jsoup Jsoup)
            (org.jsoup.nodes Document Entities$EscapeMode)))
 
-(defn- append-meta [^Document doc page-id title]
+(defn- create-meta [^Document doc k v]
+  (-> (.createElement doc "meta")
+      (.attr "name" (name k))
+      (.attr "content" (str v))
+      (.text "")))
+
+(defn- append-meta [^Document doc {:keys [history id title]}]
   (let [title (-> (.createElement doc "title")
                   (.text title))
-        page-id-meta (-> (.createElement doc "meta")
-                         (.attr "name" "page-id")
-                         (.attr "content" page-id)
-                         (.text ""))]
-    (-> (.head doc)
-        (.appendChild title)
-        (.appendChild page-id-meta))))
+        history-meta (->> (utils/flatten-paths history ".")
+                          ;; e.g. :createdBy._expandable.status, :createdBy._links.self
+                          (remove #(clojure.string/includes? (str %) "_"))
+                          (into {}))
+        meta (assoc history-meta :page-id id)
+        head (.head doc)]
+    (.appendChild head title)
+    (doseq [[k v] meta]
+      (.appendChild head (create-meta doc k v)))))
 
 (defn- same-host? [href host confluence-url]
   (or (string/starts-with? href "/")
@@ -120,11 +128,12 @@
   "Parses HTML document, appends metadata and rewrites internal links in images and anchors.
 
   Returns a map containing the resulting HTML string and the referenced attachments."
-  [content page-id title {:keys [confluence-url pages space-attachments]}]
-  (let [doc (Jsoup/parseBodyFragment content)
+  [{:keys [id] :as page} {:keys [confluence-url pages space-attachments]}]
+  (let [content (get-in page [:body :export_view :value])
+        doc (Jsoup/parseBodyFragment content)
         _ (-> (.outputSettings doc)
               (.escapeMode Entities$EscapeMode/base))
-        _ (append-meta doc page-id title)
+        _ (append-meta doc page)
         attachments (set/union (rewrite-a doc pages space-attachments confluence-url)
-                               (rewrite-img doc page-id space-attachments confluence-url))]
+                               (rewrite-img doc id space-attachments confluence-url))]
     (models/->ContentWithAttachments (.outerHtml doc) attachments)))
