@@ -8,9 +8,7 @@
             [charon.models :as models]
             [charon.utils :as utils]
             [hiccup.core :as h]
-            [perseverance.core :refer [retry progressive-retry-strategy]]
-            [schema.core :as s]
-            [slingshot.slingshot :refer [throw+]]))
+            [schema.core :as s]))
 
 (def content-request-limit 25)
 (def content-request-expand (string/join "," ["body.export_view" "children.page" "children.attachment" "history"]))

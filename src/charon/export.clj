@@ -4,8 +4,7 @@
             [charon.steps :as steps]
             [charon.utils :as utils]
             [perseverance.core :refer [retry progressive-retry-strategy]]
-            [schema.core :as s]
-            [slingshot.slingshot :refer [throw+]])
+            [schema.core :as s])
   (:import (clojure.lang ExceptionInfo)))
 
 ;; TODO: Memory footprint?
@@ -23,7 +22,7 @@
   (fn [e] (and (instance? ExceptionInfo e)
                (contains? coll (:tag (ex-data e))))))
 
-(defn- export [{:keys [confluence-url space page output] :as ctx}]
+(defn- export [{:keys [confluence-url space page] :as ctx}]
   (if page
     (log/infof "Exporting Confluence page %s - %s from: %s" space page confluence-url)
     (log/infof "Exporting Confluence space %s from: %s" space confluence-url))
