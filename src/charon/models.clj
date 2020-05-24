@@ -20,7 +20,9 @@
    (s/optional-key :debug)      s/Bool
    (s/optional-key :page)       s/Str
    (s/optional-key :page-url)   s/Str
+   (s/optional-key :password)   s/Str
    (s/optional-key :space-url)  s/Str
+   (s/optional-key :username)   s/Str
    (s/optional-key :-overwrite) s/Bool})
 
 (s/defschema Page {s/Keyword s/Any})
