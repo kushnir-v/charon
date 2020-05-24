@@ -91,7 +91,7 @@
 
 (defn- get-body [url r {:keys [username password]}]
   (let [opts (-> r
-                 (merge {:socket-timeout 10000 :connection-timeout 10000})
+                 (merge {:socket-timeout 10000 :connection-timeout 10000 :cookie-policy :none})
                  (conj (when password [:basic-auth [username password]])))
         _ (debug-get-body url opts)
         {:keys [status body] :as resp} (client/get url opts)]
