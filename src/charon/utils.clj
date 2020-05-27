@@ -94,12 +94,8 @@
                  (merge {:socket-timeout 10000 :connection-timeout 10000 :cookie-policy :none})
                  (conj (when password [:basic-auth [username password]])))
         _ (debug-get-body url opts)
-        {:keys [status body] :as resp} (client/get url opts)]
-    (if-not (= status 200)
-      (throw+ {:type    ::request-failed
-               :message "HTTP request to Confluence failed"
-               :context resp})
-      body)))
+        {:keys [body]} (client/get url opts)]
+    body))
 
 (defn get-json [url r config]
   (retriable {:catch [Exception]

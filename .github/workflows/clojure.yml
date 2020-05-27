@@ -23,7 +23,7 @@ jobs:
     - name: Lint (eastwood)
       run: lein eastwood
     - name: Run tests
-      run: lein test
+      run: lein kaocha
     - name: Deploy
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

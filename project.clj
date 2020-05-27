@@ -3,6 +3,9 @@
   :url "https://github.com/shapiy/charon"
   :license {:name "GNU GENERAL PUBLIC LICENSE v3"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
+  :aliases {"kaocha" ["with-profile" "dev,kaocha"
+                      "run" "-m" "kaocha.runner"
+                      "--plugin" "kaocha.plugin/junit-xml" "--junit-xml-file" "target/junit.xml"]}
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [cheshire "5.10.0"]
                  [ch.qos.logback/logback-classic "1.2.3"]
@@ -22,9 +25,11 @@
                        :injections [(prn (into {} (System/getProperties)))]}
              :dev     {:source-paths ["dev"]
                        :plugins      [[camechis/deploy-uberjar "0.3.0"]
-                                      [jonase/eastwood "0.3.10"]
-                                      [lein-eftest "0.5.9"]]
-                       :dependencies [[org.clojure/tools.namespace "1.0.0"]]}
+                                      [jonase/eastwood "0.3.10"]]
+                       :dependencies [[clj-http-fake "1.0.3"]
+                                      [org.clojure/tools.namespace "1.0.0"]]}
+             :kaocha  {:dependencies [[lambdaisland/kaocha "1.0.632"]
+                                      [lambdaisland/kaocha-junit-xml "0.0-70"]]}
              :uberjar {:aot :all}}
   :repositories [["github" {:url      "https://maven.pkg.github.com/shapiy/charon"
                             :username "shapiy"
