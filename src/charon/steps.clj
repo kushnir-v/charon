@@ -1,5 +1,5 @@
 (ns charon.steps
-  "Export steps."
+  "Export steps and helpers."
   (:require [clojure.set :as set]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
@@ -11,22 +11,50 @@
             [schema.core :as s]))
 
 (def content-request-limit 25)
-(def content-request-expand (string/join "," ["body.export_view" "children.page" "children.attachment" "history"]))
+
+(defn- get-pages*
+  ([ctx query-params url on-loop-start]
+   (loop [start 0 res (list)]
+     (on-loop-start start)
+     (let [all-query-params (merge {:start start :limit content-request-limit} query-params)
+           body (utils/get-json url {:accept :json :query-params all-query-params} ctx)
+           next-path (get-in body [:page :_links :next])
+           next-res (lazy-cat res (get-in body [:page :results] (list)))]
+       (if-not next-path
+         next-res
+         (let [next-start (+ start content-request-limit)]
+           (recur next-start next-res)))))))
+
+(defn- get-child-pages
+  [{:keys [confluence-url] :as ctx} page-id]
+  (let [query-params {:expand "page"}
+        url (format "%s/rest/api/content/%s/child" confluence-url page-id)
+        log-fn #(log/infof "Downloading child pages of %s starting from: %d" page-id %)]
+    (get-pages* ctx query-params url log-fn)))
+
+(defn- maybe-add-child-pages
+  "Optionally fetch and update child pages if their number exceed the default Confluence limit."
+  [ctx {:keys [id title] :as page}]
+  (let [child-page-limit (get-in page [:children :page :limit] 0)
+        child-page-size (get-in page [:children :page :size] 0)]
+    (if (and (pos? child-page-size)
+             (= child-page-size child-page-limit))
+      (do
+        (log/infof "Page \"%s\" may have more child pages than listed, fetching them." title)
+        ;; Preserve :results, removing :start, :limit and :_links, since this metadata can be misleading
+        ;; after fetching all child pages.
+        (assoc-in page [:children :page] {:results (get-child-pages ctx id)}))
+      page)))
 
 (defn get-pages
   "Fetch all space content using pagination."
   [{:keys [confluence-url space] :as ctx}]
-  (let [url (format "%s/rest/api/space/%s/content" confluence-url space)]
-    (loop [start 0 ret (list)]
-      (log/infof "Downloading %d pages starting from: %d" content-request-limit start)
-      (let [query-params {:type "page" :start start :limit content-request-limit :expand content-request-expand}
-            body (utils/get-json url {:accept :json :query-params query-params} ctx)
-            next-path (get-in body [:page :_links :next])
-            next-ret (lazy-cat ret (get-in body [:page :results] (list)))]
-        (if-not next-path
-          next-ret
-          (let [next-start (+ start content-request-limit)]
-            (recur next-start next-ret)))))))
+  (let [query-params {:expand (string/join "," ["body.export_view" "children.page" "children.attachment" "history"])
+                      :type   "page"}
+        url (format "%s/rest/api/space/%s/content" confluence-url space)
+        log-fn #(log/infof "Downloading space pages starting from: %d" %)
+        res (get-pages* ctx query-params url log-fn)]
+    (map #(maybe-add-child-pages ctx %) res)))
 
 (defn attachment->url
   "Returns a set of all attachments in the confluence space."
