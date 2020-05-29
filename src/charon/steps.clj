@@ -50,7 +50,9 @@
 (defn get-pages
   "Fetch all space pages."
   [{:keys [confluence-url space] :as ctx}]
-  (let [query-params {:expand (string/join "," ["body.export_view" "children.page" "children.attachment" "history"])
+  (let [query-params {:expand (string/join "," ["body.export_view"
+                                                "children.page" "children.attachment"
+                                                "history" "history.lastUpdated"])
                       :type   "page"}
         url (format "%s/rest/api/space/%s/content" confluence-url space)
         log-fn #(log/infof "Downloading space pages starting from: %d" %)
