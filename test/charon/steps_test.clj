@@ -17,7 +17,7 @@
            (is (= {:type   "page"
                    :start  "0"
                    :limit  "25"
-                   :expand "body.export_view,children.page,children.attachment,history"} query-params)))
+                   :expand "body.export_view,children.page,children.attachment,history,history.lastUpdated"} query-params)))
          {:status 200 :body (json/generate-string {})})}
       (let [res (steps/get-pages context)]
         (is (= [] res)))))
