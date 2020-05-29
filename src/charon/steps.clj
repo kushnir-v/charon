@@ -12,49 +12,53 @@
 
 (def content-request-limit 25)
 
-(defn- get-pages*
-  ([ctx query-params url on-loop-start]
-   (loop [start 0 res (list)]
-     (on-loop-start start)
-     (let [all-query-params (merge {:start start :limit content-request-limit} query-params)
-           body (utils/get-json url {:accept :json :query-params all-query-params} ctx)
-           next-path (get-in body [:page :_links :next])
-           next-res (lazy-cat res (get-in body [:page :results] (list)))]
-       (if-not next-path
-         next-res
-         (let [next-start (+ start content-request-limit)]
-           (recur next-start next-res)))))))
+(defn- paginate-content
+  "Paginate content, for example pages or attachments."
+  [ctx kind query-params url on-loop-start]
+  (loop [start 0 res (list)]
+    (on-loop-start start)
+    (let [all-query-params (merge {:start start :limit content-request-limit} query-params)
+          body (utils/get-json url {:accept :json :query-params all-query-params} ctx)
+          next-path (get-in body [kind :_links :next])
+          next-res (lazy-cat res (get-in body [kind :results] (list)))]
+      (if-not next-path
+        next-res
+        (let [next-start (+ start content-request-limit)]
+          (recur next-start next-res))))))
 
-(defn- get-child-pages
-  [{:keys [confluence-url] :as ctx} page-id]
-  (let [query-params {:expand "page"}
+(defn- get-children
+  [{:keys [confluence-url] :as ctx} kind page-id]
+  (let [kind-str (name kind)
+        query-params {:expand kind-str}
         url (format "%s/rest/api/content/%s/child" confluence-url page-id)
-        log-fn #(log/infof "Downloading child pages of %s starting from: %d" page-id %)]
-    (get-pages* ctx query-params url log-fn)))
+        log-fn #(log/infof "Downloading child %ss of %s starting from: %d" kind-str page-id %)]
+    (paginate-content ctx kind query-params url log-fn)))
 
-(defn- maybe-add-child-pages
-  "Optionally fetch and update child pages if their number exceed the default Confluence limit."
-  [ctx {:keys [id title] :as page}]
-  (let [child-page-limit (get-in page [:children :page :limit] 0)
-        child-page-size (get-in page [:children :page :size] 0)]
-    (if (and (pos? child-page-size)
-             (= child-page-size child-page-limit))
+(defn- maybe-add-children
+  "Optionally fetch and update children if their number exceed the default Confluence limit."
+  [ctx kind {:keys [id title] :as page}]
+  (let [limit (get-in page [:children kind :limit] 0)
+        size (get-in page [:children kind :size] 0)]
+    (if (and (pos? size) (= size limit))
       (do
-        (log/infof "Page \"%s\" may have more child pages than listed, fetching them." title)
+        (log/infof "Page \"%s\" may have more child %ss than listed, fetching them." title (name kind))
         ;; Preserve :results, removing :start, :limit and :_links, since this metadata can be misleading
         ;; after fetching all child pages.
-        (assoc-in page [:children :page] {:results (get-child-pages ctx id)}))
+        (assoc-in page [:children kind] {:results (get-children ctx kind id)}))
       page)))
 
 (defn get-pages
-  "Fetch all space content using pagination."
+  "Fetch all space pages."
   [{:keys [confluence-url space] :as ctx}]
   (let [query-params {:expand (string/join "," ["body.export_view" "children.page" "children.attachment" "history"])
                       :type   "page"}
         url (format "%s/rest/api/space/%s/content" confluence-url space)
         log-fn #(log/infof "Downloading space pages starting from: %d" %)
-        res (get-pages* ctx query-params url log-fn)]
-    (map #(maybe-add-child-pages ctx %) res)))
+        res (paginate-content ctx :page query-params url log-fn)]
+    (map
+      (comp (partial maybe-add-children ctx :attachment)
+            (partial maybe-add-children ctx :page))
+      res)))
 
 (defn attachment->url
   "Returns a set of all attachments in the confluence space."
