@@ -50,7 +50,7 @@
 (defn get-pages
   "Fetch all space pages."
   [{:keys [confluence-url space] :as ctx}]
-  (let [query-params {:expand (string/join "," ["body.view"
+  (let [query-params {:expand (string/join "," ["body.export_view"
                                                 "children.page" "children.attachment"
                                                 "history" "history.lastUpdated"])
                       :type   "page"}

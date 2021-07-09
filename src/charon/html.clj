@@ -129,7 +129,7 @@
 
   Returns a map containing the resulting HTML string and the referenced attachments."
   [{:keys [id] :as page} {:keys [confluence-url pages space-attachments]}]
-  (let [content (get-in page [:body :view :value])
+  (let [content (get-in page [:body :export_view :value])
         doc (Jsoup/parseBodyFragment content)
         _ (-> (.outputSettings doc)
               (.escapeMode Entities$EscapeMode/base))
