@@ -13,21 +13,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - uses: DeLaGuardo/setup-clj-kondo@v1
-      with:
-        version: '2020.04.05'
-    - name: Install dependencies
-      run: lein deps
-    - name: Lint (clj-kondo)
-      run: clj-kondo --lint src
-    - name: Lint (eastwood)
-      run: lein eastwood
-    - name: Run tests
-      run: lein kaocha
-    - name: Deploy
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: lein deploy github
+#    - uses: DeLaGuardo/setup-clj-kondo@v1
+#      with:
+#        version: '2020.04.05'
+#    - name: Install dependencies
+#      run: lein deps
+#    - name: Lint (clj-kondo)
+#      run: clj-kondo --lint src
+#    - name: Lint (eastwood)
+#      run: lein eastwood
+#    - name: Run tests
+#      run: lein kaocha
+#    - name: Deploy
+#      env:
+#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      run: lein deploy github
     - name: Uberjar
       run: lein uberjar
     - name: Upload artifacts
